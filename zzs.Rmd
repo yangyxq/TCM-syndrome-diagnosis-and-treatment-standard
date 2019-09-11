@@ -402,9 +402,6 @@ ggplot(temp, aes(x='',y=val,fill=建议)) +geom_bar(stat= 'identity')+
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;指南熟悉程度对质量水平评价结果的影响见图9。
 
 #####图9 
-```{r}
-
-```
 
 ```
 
