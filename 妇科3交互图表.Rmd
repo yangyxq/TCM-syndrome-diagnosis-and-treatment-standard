@@ -1,0 +1,88 @@
+---
+output: word_document
+---
+
+```{r 0,echo=FALSE,message=FALSE}
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(xtable)
+library(dplyr)
+library(scales)
+library(ggthemes)
+library(grid)
+library(xlsx)
+library(compareGroups)
+
+###此处需要设置为自己的路径
+setwd("~/Desktop/暑假中医数据科学实习/乌冬面学姐的数据/妇科痛经适用性调查")
+fksysj <-read.xlsx("妇科痛经适用性调查.xlsx", header = T, sheetName ="Sheet0")
+```
+
+---
+title: "2013年`r unique(znsy$flag)`指南适用性评价统计报告"
+output: word_document
+---
+```{r 0,echo=FALSE,message=FALSE}
+temp <- subset(fksysj, select = c('NA..3', 'NA..10'))
+temp1 <- as.data.frame(temp)
+temp1 <- filter(temp1, temp1$NA..3!='职称')
+temp1$NA..10 <- as.numeric(as.character(temp1$NA..10))
+temp2 <- temp1
+for (i in 1:length(temp1$NA..10)){
+  if(is.na(temp1[i,2])){
+    temp2[i,2] <- 'kong'
+  } else if(temp1[i,2] > 5 & temp1[i,2] <= 7){
+    temp2[i,2] <- 'hao'
+  } else if(temp1[i,2] <= 5 & temp1[i,2] >= 3){
+    temp2[i,2] <- 'zhong'
+  } else{
+    temp2[i,2] <- 'cha'
+  }
+}
+temp2$NA..3 <- as.character((temp2$NA..3))
+for (i in 1:length(temp2$NA..3)){
+  if(temp2[i,1] == ''){
+    temp2[i,1] <- '职称缺失'
+  }
+}
+temp3 <- table(temp2)
+temp3 <- as.data.frame(temp3)
+temp3$FreqPer <- ""
+for (i in 1:nrow(temp3)) {
+  if(temp3$NA..3[i] == "主任医师"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "主任医师", 3]), 4)*100, "%")} 
+  else if(temp3$NA..3[i] == "主治医师"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "主治医师", 3]), 4)*100, "%")}
+  else if(temp3$NA..3[i] == "住院医师"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "住院医师", 3]), 4)*100, "%")}
+  else if(temp3$NA..3[i] == "副主任医师"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "副主任医师", 3]), 4)*100, "%")}
+  else if(temp3$NA..3[i] == "教授"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "教授", 3]), 4)*100, "%")}
+  else if(temp3$NA..3[i] == "职称缺失"){
+    temp3$FreqPer[i] <- paste(round(temp3$Freq[i]/sum(temp3[temp3$NA..3 == "职称缺失", 3]), 4)*100, "%")}
+}
+temp3$NA..10 <- factor(temp3$NA..10, levels=c("hao", "zhong", "cha", "kong"), labels=c("hao", "zhong", "cha", "kong"))
+```
+
+```{r 图1,echo=FALSE,message=FALSE,fig.width=7,fig.height=4}
+# create a dataset
+zhicheng <- temp3$NA..3 
+pingjia <- temp3$NA..10
+renshu <- temp3$Freq
+renshulv <- temp3$FreqPer
+data <- data.frame(zhicheng, pingjia, renshu)
+# Grouped
+ggplot(data, aes(x=zhicheng, y=renshu)) + 
+  geom_bar(aes(fill=pingjia), position="dodge", stat="identity")+
+  geom_line(aes(colour=pingjia, group=pingjia), position=position_dodge(width=0.9))+
+  geom_point(aes(colour=pingjia), position=position_dodge(width=0.9))+
+  geom_text(aes(group=pingjia, label=paste(renshu, "(", renshulv, ")")), size=5, col="black", vjust=-0.25, position=position_dodge(width=0.9))+
+  ylab("renshu")+xlab("zhicheng")
+```
+
+
+
+
+
