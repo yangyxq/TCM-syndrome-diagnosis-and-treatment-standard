@@ -1,0 +1,3990 @@
+---
+title: "2018年11月灯盏花素注射液HIS分析报告"
+author: 报告人：xxh
+date: "报告日期：`r Sys.Date()`"
+output:
+  word_document: 
+    reference_docx: yeartemp.docx
+    fig_caption: yes
+    fig_height: 6
+    fig_width: 8
+  params:
+  adryear: 2018
+  adrmonth: 6
+  adrauthor: 'admin'
+---
+```{r , results = 'hide'  , include = FALSE}
+#注：第三个窗口有个导入疾病代码的目录需要手动更改
+#注：6.1--6.2需要更改的参数
+#章节
+chapter <- 2
+drug_names <- "醒脑静注射液"
+
+#选择用药剂量人群
+sdose_people <- c("")#选择用药剂量人群
+
+
+#年龄分段
+page <- c(18,45,65,75,85)#年龄分为6段，传入5个数字
+pagesection <- c("<=18岁","18-45岁","45-65","65-75岁","75-85岁",">85岁","缺失")
+#住院天数分段
+phlos <- c(3,7,14,28)#住院天数分为5段，传入4个数字
+phlossection <- c("<=3天","3-7天","7-14天","14-28天",">28天","缺失")
+#剂量分段
+pdose <- c(10,20,30,40)#剂量分为4-7段，传入3-6个数字
+pdosesection <- c("<=10ml","10-20ml","20-30ml","30-40ml",">40ml")
+#疾病筛选
+select_crowd <- c("I63","B08.401","S06","G45")#目前仅支持2-5种疾病
+select_crowd_explain <- c("脑梗死","手足口病","颅脑损伤","脑供血不足")
+#疗程、剂量与年龄的交叉描述中的年龄区间
+agesection <- c(18,45,65,75)#分为5段，传入4个数字
+age_section <- c("0-18岁","18-45岁","45-65岁","65-75岁",">75岁")
+#交叉验证中治疗结果
+outcome <- c("治愈","好转","死亡","无效","其他")#共5个选项
+```
+
+```{r setup, include = FALSE}
+library("RJSONIO")
+library("tab")#创建统计汇总报表的功能
+library(RODBC)##读取Access文件
+library(acepack)
+library(ggplot2)
+library("Hmisc")
+library("compareGroups")#分组描述性分析
+library("psych")##用于量表分析，使用函数omega，需安装包GPArotation
+library("knitr")#在R中生成动态报表的通用软件包
+library("greport")##调用合并多个文件的函数Merge
+library("dplyr")##数据操作语法包，用于简洁数据处理
+library(plyr)
+library("tidyr")
+library("xtable")#导出表格为LaTex和html格式
+library("faraway")
+library("lattice")
+library("gmodels")#各种模型拟合的编程工具
+library(flextable)#表格格式
+library(officer)#表格格式
+library(plotrix)
+library(ggthemes)
+library(lubridate)
+library(rmarkdown)
+library(gdata)
+library(data.table)
+library(captioner)#图表title
+library("openxlsx")
+##设置全局选项
+#为margin设置一个钩子
+knit_hooks$set(margin = function(before, options, envir){
+  if(before)
+    par(mar = c(4, 4, 1, 0.4)) else NULL
+})
+#opts_chunk$set()可以更改文档中的默认全局选项
+opts_chunk$set(comment=NA, echo = FALSE, message=FALSE, warning=FALSE, yeshzs='asis', margin=TRUE)
+```
+
+```{r }
+#导入数据
+setwd("E:\\R")#导入疾病代码表所在的目录
+da0<- read.xlsx("diag.xlsx", sheet = 1)
+#connect=odbcConnect("SQL Server",uid="Administrator",pwd="") 
+connect <- odbcDriverConnect('driver={SQL Server};server=localhost\\sql2012;database=HISResearch_ExportDB_醒脑静注射液;uid=devuser;pwd=1231qaz!;')
+#a<- sqlQuery(connect,"select * from dbo.FACT_INPATIENT_VISIT offset 190 rows fetch next 10")
+dat1 <- sqlQuery(connect,"select * from [dbo].[FACT_INPATIENT_VISIT]",as.is=T)#主表
+dat2<- sqlQuery(connect,"select * from [dbo].[FACT_INP_SETTLE_DETAIL]",as.is=T)#费用表
+dat3 <- sqlQuery(connect,"select * from [dbo].[FACT_DIAGNOSIS]",as.is=T)#西医诊断表
+dat4 <- sqlQuery(connect,"select * from [dbo].[FACT_DIAGNOSIS_ZY]",as.is=T)#中医诊断表
+dat5 <- sqlQuery(connect,"select * from [dbo].[FACT_ORDERS]",as.is=T)#医嘱表
+dat6 <- sqlQuery(connect,"select * from [dbo].[STAT_ORDER_MERGE]",as.is=T)#合并用药提取表
+#m <- sqlQuery(connect,"select top 190 * from dbo.FACT_INPATIENT_VISIT")
+#l <- sqlQuery(connect,"select top 191 * from dbo.FACT_INPATIENT_VISIT where id not in (select top 191 id from dbo.FACT_INPATIENT_VISIT)")
+close(connect)
+```
+
+```{r}
+data1 <- dat1
+data2 <- dat2[dat2$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data3 <- dat3[dat3$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data4 <- dat4[dat4$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data5 <- dat5[dat5$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data6 <- dat6[dat6$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+```
+
+
+```{r}
+if(length(sdose_people) > 1){
+ qq <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+ dose <- qq[qq$DOSAGE == sdose_people[1],]
+adapt1 <- data1[data1$PATIENT_VISITID_ENCRYPT %in% dose$PATIENT_VISITID_ENCRYPT, ]
+data1 <- adapt1
+data2 <- data2[data2$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data3 <- data3[data3$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ] 
+data4 <- data4[data4$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ] 
+data5 <- data5[data5$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+data6 <- data6[data6$PATIENT_VISITID_ENCRYPT %in% data1$PATIENT_VISITID_ENCRYPT, ]
+}
+
+```
+
+
+
+```{r}
+table_nums <- captioner(prefix = "表")
+fig_nums <- captioner(prefix = "图")
+```
+
+药品生产企业：
+
+HIS数据仓库建立单位：
+
+统计分析及报告撰写单位：
+
+&emsp;&emsp;&emsp;&emsp;&emsp; 完成时间：`r Sys.Date()`
+
+
+术语、略语表
+
+&emsp;&emsp; HIS, 医院信息系统（Hospital Information Syste）
+
+&emsp;&emsp; LIS，实验室指标信息系统（Laboratory Information Management System）
+
+&emsp;&emsp; ALT，谷丙转氨酶
+
+&emsp;&emsp; AST，谷草转氨酶
+
+&emsp;&emsp; BUN，尿素氮
+
+&emsp;&emsp; Cr，肌酐（creatinine）
+
+1 概述
+======
+
+&emsp;&emsp;本报告分析了`r length(unique(data3$HospitalCode))`
+家医院的住院患者的HIS数据库和LIS数据库，通过描述统计和统计建模的方法，立足全人群的描述统计分析，结合药物使用说明书，分析了适应症人群、死亡人群，以及用药方案，可疑过敏反应，以及药物安全性方面的内容。完整的展现了`r length(unique(data3$HospitalCode))` 家医院中使用`r drug_names`的患者的人口学特征，给药剂量、方案，以及用药过程中的安全性等内容。
+
+## 1.1 数据来源
+
+&emsp;&emsp;本报告的数据来源于`r length(unique(data3$HospitalCode))` 家医院的HIS和LIS数据库，包括住院主记录表、中医诊断信息表、西医诊断信息表、医嘱信息表、费用分组明细表、联合用药表等共6个表的数据。
+
+## 1.2 数据规范化
+
+&emsp;&emsp;在统计分析之前，对HIS和LIS数据库进行了标准化，标准化的流程如下图所示。目的是：（1）保证分析的患者的唯一性，（2）保证各表之间具有相关性，（3）保证医嘱和诊断名称一致性，（4）保证用药剂量单位和理化指标结果有效性。基于这4个方面的原则，对数据库的信息进行统一标准化，形成完整有效的分析数据。标准化的流程如图所示。
+![](./1.png "1")
+ 
+## 1.3 统计分析方法
+
+&emsp;&emsp;报告中主要采用描述统计的方法，对数据库进行全面有效的分析。其中描述统计中使用的方法有频数统计、均值、方差、中位数统计、针对服从正态分布的t检验、卡方检验，针对非正态分布的秩和检验。其次，使用关联规则探索医嘱之间的关系，探索诊断结果之间的关系。报告中采用了logistic统计模型，目的是探索可疑过敏人群中，引起过敏的影响因素。在对理化指标的分析过程中，使用了倾向评分来评价使用`r drug_names`人群和未使用`r drug_names`人群之间的肝功能指标（谷丙转氨酶，谷草转氨酶），肾功能指标（肌酐，尿素氮）之间的差异。最后使用图表有效的把统计分析结果呈现出来。本文的主要分析方法如下表所述。
+
+## 1.4 统计分析流程
+
+&emsp;&emsp;HIS数据库的分析过程包括，数据的提取阶段、基本描述阶段、深入描述阶段、具体问题分析阶段，以及统计分析报告的整理等五个阶段，每个阶段完成的任务不同，总体流程如下图。
+![](./2.png "2")
+ 
+## 1.5 统计分析、运行环境
+
+&emsp;&emsp;(1)Windows10操作系统
+
+&emsp;&emsp;(2)统计分析软件R x64 3.5.1
+
+&emsp;&emsp;(3)sql server 2012
+
+## 1.6 报告内容及结构
+
+&emsp;&emsp;报告的分析内容主要有如下几个方面：
+
+&emsp;&emsp;（1）全人群描述。分析`r length(unique(data3$HospitalCode))` 家医院中，使用`r drug_names`的患者的人口学特征、并发症、`r drug_names`的使用情况、以及合并用药等。目的是掌握使用用`r drug_names`人群的患者的基本情况，为后续分析奠定基础。分析内容详见第2节。
+
+&emsp;&emsp;（2）适应症人群描述。从说明书出发，分析`r drug_names`的适应症人群的人口学特征、并发症、合并用药等，以掌握`r drug_names`在适应症人群的使用情况。分析内容详见第3节。
+
+&emsp;&emsp;（3）死亡人群描述。死亡人群主要分析使用`r drug_names`的患者中，死亡人群的人口学特征、并发症、合并用药等。目的是掌握使用`r drug_names`的患者中，出现死亡的人群的基本情况。分析内容详见第4节。
+
+&emsp;&emsp;（4）用药方案。利用关联规则，分析适应症人群中，频数最高的给药方案与其他方案之间的差异。分析内容详见第5节。
+
+&emsp;&emsp;（5）可疑过敏反应分析。利用描述统计和logistic回归，探索可疑过敏人群中，引起过敏的影响因素。分析内容详见第6节。
+
+&emsp;&emsp;（6）肝肾功能分析。利用倾向评分，评价使用`r drug_names`和未使用`r drug_names`两组人群之间，肝功能指标和肾功能指标之间的差异。分析内容详见第7节。
+
+## 1.7 分析结果
+
+&emsp;&emsp;分析数据获得以下发现：
+
+&emsp;&emsp;此处结果无法自动生成报告，需要等所有结果全部分析完成才能总结！
+
+2 全人群描述分析
+================
+
+&emsp;&emsp;全人群的描述，目的是要分析HIS数据库`r length(unique(data3$HospitalCode))`家医院中使用的用`r drug_names`的`r nrow(data1)`例患者，从而掌握使用`r drug_names`患者的人口学分布特征，这些特征包括年龄、性别、职业、入院/出院病情、职业、费用等，并且分析了患者的并发症、合并用药，从而通过对真实世界数据库的分析，掌握使用`r drug_names`的患者特征，疾病情况，以及药物的使用剂量、合并用药的使用情况等，为药物的临床使用和深入分析提供指导意义。
+
+## `r chapter`.1 基本信息
+
+&emsp;&emsp;基本信息表中包含有`r nrow(data1)` 例患者，其中包含了他们的年龄、性别、职业、入院病情等基本信息，下面对患者的这些基本信息进行统计分析，主要采用的分析方法为频数分析。
+
+### `r chapter`.1.1 年龄
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，使用`r drug_names`的患者的年龄分布情况见表1。
+
+<tr>**`r table_nums("tab1", caption = "患者年龄（岁）分布表")`**</tr>
+
+```{r }
+  age <- as.vector(data1$AGE)
+  des <- as.data.frame(psych::describe(age))
+  des <- des[,-c(6:7, 10:13)]
+  des$vars <- des$n
+  des$n <- nrow(data1)-des$vars
+  des <- round(des,dig=2)
+  da=c(age)
+  a <- t.test(da)
+  b <- as.vector(a$conf.int)
+  b <- round(b,dig=2)
+  des[,8:9] <- b
+  
+  for(i in 1:ncol(des)){
+    des[, i] <- as.character(des[, i])
+  }
+  myft <- regulartable(des, 
+       col_keys = names(des))
+  myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                            sd = "标准差", median = "中位数", min = "最小值",
+                            max = "最大值",V8 = "下界", V9 = "上界" )
+  myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                            sd = "标准差", median = "中位数", min = "最小值",
+                            max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(des), width = 0.7)
+  myft
+
+```
+
+&emsp;&emsp;从表1看到，患者年龄最小为`r min(data1$AGE,na.rm = TRUE)`岁（`r nrow(data1[data1$AGE == min(data1$AGE,na.rm = TRUE), ])`例），年龄最大为`r max(data1$AGE,na.rm = TRUE)`岁（`r nrow(data1[data1$AGE == (max(data1$AGE,na.rm = TRUE) & !is.na(data1$AGE)), ])`例），平均年龄为`r round(mean(data1$AGE,na.rm = TRUE),dig=2)`岁，患者年龄中位数为`r median(data1$AGE,na.rm = TRUE)`岁。所有患者年龄分布直方图如下图1所示
+
+```{r}
+ggplot(data1, aes(x=age)) +
+  geom_histogram(position = "identity", binwidth = 0.5, aes(y = ..density..),
+  alpha = 0.5) + geom_density() +
+  labs(list(title = "", x = "年龄", y = "密度")) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+<tr>**`r fig_nums("pic1", caption = "患者年龄分布直方图")`**</tr>
+
+&emsp;&emsp;从图1看到，样本中患者的年龄分布有XX个峰值，分别在XXXXX左右，XXXX占总数较大比例。各年龄段患者按频数递减的分布情况见表2和图2。
+
+<tr>**`r table_nums("tab2", caption = "各年龄段患者分布表")`**</tr>
+
+```{r}
+dig <- 4
+age1 <- data1$AGE
+data1$age2[ is.na(age1) | age1 == "NA"] <- pagesection[7]
+data1$age2[age1 >= 0 & age1 <= page[1]] <- pagesection[1]
+data1$age2[age1 > page[1] & age1 <= page[2]] <- pagesection[2]
+data1$age2[age1 > page[2] & age1 <= page[3]] <- pagesection[3]
+data1$age2[age1 > page[3] & age1 <= page[4]] <- pagesection[4]
+data1$age2[age1 > page[4] & age1 <= page[5]] <- pagesection[5]
+data1$age2[age1 > page[5]] <- pagesection[6]
+tab <- table(data1$age2)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('年龄','频数')
+colnames(tab1)=c('年龄','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1 <- table1[order(table1[,2],decreasing = TRUE),]
+table2 <- table1
+table1[nrow(table1)+1, 1] <- "合计"
+table1[nrow(table1), 2:3] <- colSums(table1[1:(nrow(table1) - 1), 2:3])
+table1[nrow(table1),3] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0 )
+myft
+```
+
+
+```{r}
+ggplot(table2,aes(x=table2[,1],y=table2[,2],fill=`频数`))  + 
+geom_bar(stat="identity") + geom_text(aes(label=table2[,2]),size=5,position=position_dodge(width=0.9), vjust=-0.25) + theme(axis.title.x =element_text(size=14), axis.title.y=element_text(size=14)) +
+ xlab(" ") + ylab(" ")
+
+```
+
+<tr>**`r fig_nums("pic2", caption = "各年龄段患者分布图")`**</tr>
+
+从表2和图2看到，各年龄段患者中，`r table1[2,1]`、`r table1[3,1]`和`r table1[4,1]`的患者，分别为`r table1[2,2]`例、`r table1[3,2]`例和`r table1[4,2]`例，在有效样本中分别占`r table1[2,3]`%、`r table1[3,3]`%、`r table1[4,3]`%；而`r table1[5,1]`和`r table1[6,1]`及以上的患者数分别为`r table1[5,2]`例和`r table1[6,2]`例，各占`r table1[5,3]`%和`r table1[6,3]`%。
+
+### `r chapter`.1.2 性别
+
+&emsp;&emsp;在`r nrow(data1)`样本中，患者的性别分布情况如表3和图3所示。
+
+<tr>**`r table_nums("tab3", caption = "患者性别分布表")`**</tr>
+
+```{r}
+sex <- subset(data1, select = c('SEX_NAME'))
+sex$SEX_NAME[sex$SEX_NAME== "其它"]  <- "缺失"
+des1 <- as.data.frame(table(sex))
+des1$pro <- round(des1$Freq/nrow(sex), 4)*100
+des1[, 1] <- as.character(des1[, 1])
+des1[nrow(des1) + 1, ] <- 0
+des1[nrow(des1), 1] <- "合计"
+des1[nrow(des1), 2:3] <- colSums(des1[1:(nrow(des1) - 1), 2:3])
+colnames(des1) <- c("性别", "频数", "百分比")
+tabl <- des1
+for(i in 1:ncol(tabl)){
+  tabl[, i] <- as.character(tabl[, i])
+}
+myft <- regulartable(tabl, 
+     col_keys = names(tabl))
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 2))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 2))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(tab1), width =1.0)
+myft
+```
+
+```{r, echo = FALSE, fig.width = 11, fig.height = 6}
+tab2<- as.data.frame(table(sex))
+#绘制条形图
+p <- ggplot(data = tab2, mapping = aes(x = 'Content', y = Freq, fill = sex)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab2$Freq/sum(tab2$Freq) * 100, 1), '%)', sep = '')
+label <- paste(tab2$sex, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label) 
+```
+
+<tr>**`r fig_nums("pic3", caption = "患者的性别分布图")`**</tr>
+
+&emsp;&emsp;从表3和图3看到，`r des1[1,1]`人数`r des1[1,2]`，`r des1[2,1]`人数`r des1[2,2]`。
+
+### `r chapter`.1.3 职业
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者的职业分布情况见表4和图4。
+
+<tr>**`r table_nums("tab4", caption = "患者的职业分布情况表")`**</tr>
+
+```{r}
+dig <- 4
+da1 <- data1
+da1 <- da1[da1$OCCUPATION_NAME != "删除"|is.na(da1$OCCUPATION_NAME),]
+da1$OCCUPATION_NAME <- as.character(da1$OCCUPATION_NAME)
+tab <- table(da1$OCCUPATION_NAME)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('职业','频数')
+colnames(tab1)=c('职业','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+for(i in 1:nrow(table1)){
+  if(table1[i,3] < "1"){
+    table1[i,1] <- "其它"
+  }
+}
+tab2 <- table1[,c(1,2)]
+tab2[, 2] <- as.numeric(tab2$`频数`) 
+colnames(tab2) <- c("career", "Freq")
+tab3 <- ddply(tab2, .(career), summarise, Freq = sum(Freq))
+
+#绘制条形图
+p <- ggplot(data = tab3, mapping = aes(x = 'Content', y = Freq, fill = 
+career)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab3$Freq/sum(tab3$Freq) * 100, 2), '%)', sep = '')
+label <- paste(tab3$career, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+
+```
+
+<tr>**`r fig_nums("pic4", caption = "患者职业分布图")`**</tr>
+
+&emsp;&emsp;注：本数据中把职业所占百分比小于1的设置为“其它”变量，以便于图形展示。
+
+&emsp;&emsp;`r drug_names`的用药人群职业分布以`r table1[1,1]`占大多数。
+
+### `r chapter`.1.4 入院病情
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者入院病情的分布情况见表5和图5。
+
+<tr>**`r table_nums("tab5", caption = "患者的入院病情分布情况表")`**</tr>
+
+```{r}
+data1$PATADM_CONDITION_NAME <- as.character(data1$PATADM_CONDITION_NAME)
+data1$PATADM_CONDITION_NAME[data1$PATADM_CONDITION_NAME =="" | data1$PATADM_CONDITION_NAME == " " | is.na(data1$PATADM_CONDITION_NAME)] <- "缺失"
+condition <- data1$PATADM_CONDITION_NAME
+
+tab <- table(condition)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('入院病情','频数')
+colnames(tab1)=c('入院病情','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+tab2<- as.data.frame(table(condition))
+#绘制条形图
+p <- ggplot(data = tab2, mapping = aes(x = 'Content', y = Freq, fill = condition)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab2$Freq/sum(tab2$Freq) * 100, 1), '%)', sep = '')
+label <- paste(tab2$condition, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+```
+
+<tr>**`r fig_nums("pic5", caption = "患者的入院病情分布情况图")`**</tr>
+
+### `r chapter`.1.5 入院科室
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者的入院科室分布情况见表6和图6所示。
+
+<tr>**`r table_nums("tab6", caption = "患者的入院科室分布情况表")`**</tr>
+
+```{r}
+dig <- 4
+data1$DEPT_ADMISSION_NAME <- as.character(data1$DEPT_ADMISSION_NAME)
+zd <- as.data.frame(data1$DEPT_ADMISSION_NAME)
+tab <- table(zd)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('入院病情','患者人数')
+colnames(tab1)=c('入院病情','符合说明书百分比(%)')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+for(i in 1:nrow(table1)){
+  if(table1[i,3] < "1"){
+    table1[i,1] <- "其它"
+  }
+}
+tab2 <- table1[,c(1,2)]
+tab2[, 2] <- as.numeric(tab2$`患者人数`) 
+colnames(tab2) <- c("career", "Freq")
+tab3 <- ddply(tab2, .(career), summarise, Freq = sum(Freq))
+
+tab2<- as.data.frame(tab3)
+names(tab2) <- c("入院科室", "Freq")
+#绘制条形图
+p <- ggplot(data = tab2, mapping = aes(x = 'Content', y = Freq, fill = `入院科室`)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab2$Freq/sum(tab2$Freq) * 100, 1), '%)', sep = '')
+label <- paste(tab2$`入院科室`, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+```
+
+<tr>**`r fig_nums("pic6", caption = "患者的入院病情分布情况图")`**</tr>
+
+&emsp;&emsp;注：本数据中把入院科室所占百分比小于1的设置为“其它”变量，以便于图形展示。
+
+### `r chapter`.1.6 住院天数
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者住院天数的分布情况见表7和图7。
+
+<tr>**`r table_nums("tab7", caption = "患者住院天数分布表")`**</tr>
+
+```{r}
+zyts <- as.vector(data1$INPATIENT_DAYS)
+des <- as.data.frame(psych::describe(zyts))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(data1)-des$vars
+des <- round(des,dig=2)
+da=c(zyts)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des,  col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(des), width =0.7)
+myft
+```
+
+```{r}
+ggplot(data1, aes(x=zyts)) +
+  geom_histogram(position = "identity", binwidth = 2, aes(y = ..density..),
+  alpha = 0.5) + geom_density() +
+  labs(list(title = "", x = "住院天数", y = "密度")) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+<tr>**`r fig_nums("pic7", caption = "患者住院天数分布直方图")`**</tr>
+
+&emsp;&emsp;进一步将住院天数分段：0-3天、8-14天、15-28天、28天以上，各段患者数分布情况见表8和图8。
+
+<tr>**`r table_nums("tab8", caption = "住院天数分段分布表")`**</tr>
+
+```{r}
+dig = 4
+zyts <- as.vector(data1$INPATIENT_DAYS)
+data1$zyts1[ is.na(zyts) | zyts == "NA"] <- phlossection[6]
+data1$zyts1[zyts >= 0 & zyts <= phlos[1]] <- phlossection[1]
+data1$zyts1[zyts > phlos[1] & zyts <= phlos[2]] <- phlossection[2]
+data1$zyts1[zyts > phlos[2] & zyts <= phlos[3]] <- phlossection[3]
+data1$zyts1[zyts > phlos[3] & zyts <= phlos[4]] <- phlossection[4]
+data1$zyts1[zyts > phlos[4]] <- phlossection[5]
+tab <- table(data1$zyts1)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('住院天数','频数')
+colnames(tab1)=c('住院天数','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+table1 <- cbind(tab,tab1)[,-3]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+#绘制条形图
+p <- ggplot(data = table1, mapping = aes(x = 'Content', y = `频数`, fill = `住院天数`)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(table1$`频数`/sum(table1$`频数`) * 100, 1), '%)', sep = '')
+label <- paste(table1$`住院天数`, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+
+```
+
+<tr>**`r fig_nums("pic8", caption = "住院天数分段分布图")`**</tr>
+
+### `r chapter`.1.7 住院费用
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者总费用的分布情况见表9。
+
+<tr>**`r table_nums("tab9", caption = "患者总费用分布表")`**</tr>
+
+```{r}
+zyfy <- as.numeric(data1$TOTAL_PAYMENTS )
+des <- as.data.frame(psych::describe(zyfy))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(data1)-des$vars   
+des <- round(des,dig=2)
+da=c(zyfy)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des,  col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(des), width =0.7)
+myft
+```
+
+```{r}
+data1$zyfy1[zyfy == "" | zyfy == " " | is.na(zyfy)] <- "缺失"
+data1$zyfy1[zyfy >= 0 & zyfy < 200] <- "0-200元"
+data1$zyfy1[zyfy >= 200 & zyfy < 500] <- "200-500元"
+data1$zyfy1[zyfy >= 500 & zyfy < 1000] <- "500-1000元"
+data1$zyfy1[zyfy >= 1000 & zyfy < 2000] <- "1000-2000元"
+data1$zyfy1[zyfy >= 2000 & zyfy < 3000] <- "2000-3000元"
+data1$zyfy1[zyfy >= 3000 & zyfy < 6000] <- "3000-6000元"
+data1$zyfy1[zyfy >= 6000 & zyfy < 10000] <- "6000-10000元"
+data1$zyfy1[zyfy >= 10000 & zyfy < 50000] <- "10000-50000元"
+data1$zyfy1[zyfy >= 50000 & zyfy <= 100000] <- "50000-100000元"
+data1$zyfy1[zyfy > 100000 ] <- ">100000元"
+
+```
+
+&emsp;&emsp;进一步将总费用分段：0-200元、200-500元、500-1000元、1000-2000元、2000-3000元、3000-6000元、6000-10000元、10000-50000元、50000-100000元、100000元以上。各段患者数分布情况见表10和图10。
+
+<tr>**`r table_nums("tab10", caption = "总费用分段分布表")`**</tr>
+
+```{r}
+tab <- table(data1$zyfy1)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('住院费用','频数')
+colnames(tab1)=c('住院费用','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[c(order(table1[1:nrow(table1)-1,2],decreasing = TRUE), nrow(table1)), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+table1 <- cbind(tab,tab1)[,-3]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+ggplot(table1,aes(x=table1[,1],y=table1[,2],fill=`住院费用`))  + 
+geom_bar(stat="identity") + geom_text(aes(label=table1[,2]),size=5,position=position_dodge(0.1),width=0.5, vjust=-0.25)+ theme(axis.title.x =element_text(size=14), axis.title.y=element_text(size=14)) +theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5))+
+xlab("") + ylab("")
+
+```
+
+<tr>**`r fig_nums("pic10", caption = "住院费用分布图")`**</tr>
+
+### `r chapter`.1.8 住院费别
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者住院费别的分布情况见表11和图10。
+
+<tr>**`r table_nums("tab11", caption = "患者住院费别分布表")`**</tr>
+
+```{r}
+da2 <- data1
+da2 <- da2[da2$CHARGE_TYPE_NAME != "删除",]
+da2$CHARGE_TYPE_NAME <- as.character(da2$CHARGE_TYPE_NAME)
+zyfb <- da2$CHARGE_TYPE_NAME
+tab <- table(zyfb)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('住院费别','频数')
+colnames(tab1)=c('住院费别','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],decreasing = TRUE),  ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 2))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 2))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+```{r}
+tab2<- as.data.frame(table(zyfb))
+names(tab2) <- c("住院费别", "Freq")
+#绘制条形图
+p <- ggplot(data = tab2, mapping = aes(x = 'Content', y = Freq, fill = `住院费别`)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab2$Freq/sum(tab2$Freq) * 100, 2), '%)', sep = '')
+label <- paste(tab2$`住院费别`, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+```
+
+<tr>**`r fig_nums("pic11", caption = "患者住院费别分布图")`**</tr>
+
+### `r chapter`.1.9 病危天数
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者病危天数的分布情况（选取全人群种有病危天数记录的患者）见表12和图11。
+
+<tr>**`r table_nums("tab12", caption = "患者病危天数分布表")`**</tr>
+
+```{r}
+bwts <- as.vector(data1$CRITICAL_COND_DAYS)
+des <- as.data.frame(psych::describe(bwts))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(data1)-des$vars
+des <- round(des,dig=2)
+da=c(bwts)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des,  col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(des), width =0.7)
+myft
+```
+
+```{r}
+ggplot(data1, aes(x=bwts)) +
+  geom_histogram(position = "identity", binwidth = 1, aes(y = ..density..),alpha = 0.5) +
+  geom_density() + 
+  labs(list(title = "", x = "病危天数", y = "密度")) +
+  xlim(0,50)+
+  theme(axis.text.y= element_text(size=15,  vjust=0.5, hjust=0.5))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+<tr>**`r fig_nums("pic12", caption = "病危天数分布图")`**</tr>
+
+### `r chapter`.1.10 病重天数
+
+&emsp;&emsp;在`r nrow(data1)`例样本中，患者病重天数的分布情况（选取全人群中有病重天数记录的患者）见表13和图12。
+
+<tr>**`r table_nums("tab13", caption = "患者病重天数分布表")`**</tr>
+
+```{r}
+bzts <- as.vector(data1$SERIOUS_COND_DAYS)
+des <- as.data.frame(psych::describe(bzts))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(data1)-des$vars
+des <- round(des,dig=2)
+da=c(bzts)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des,  col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(des), width =0.7)
+myft
+
+```
+
+```{r}
+ggplot(data1, aes(x=bzts)) +
+  geom_histogram(position = "identity", binwidth = 0.5, aes(y = ..density..),alpha = 0.5) + geom_density() + labs(list(title = "", x = "病重天数", y = "密度")) +xlim(0,50)+
+  theme(axis.text.y= element_text(size=15,  vjust=0.5, hjust=0.5))+
+theme(plot.title = element_text(hjust = 0.5))
+```
+
+<tr>**`r fig_nums("pic13", caption = "患者病重天数分布图")`**</tr>
+
+## `r chapter`.2 西医诊断
+
+&emsp;&emsp;西医诊断表中包含有`r nrow(data3)`条记录，下面对患者的这些基本信息进行统计分析，主要采用的分析方法为频数分析。
+
+### `r chapter`.2.1 诊断类型
+
+<tr>**`r table_nums("tab14", caption = "患者诊断类型分布表")`**</tr>
+
+```{r}
+data3$DIAGNOSIS_TYPE_NAME <- as.character(data3$DIAGNOSIS_TYPE_NAME)
+tab <- table(data3$DIAGNOSIS_TYPE_NAME)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('诊断类型','频数')
+colnames(tab1)=c('诊断类型','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$`累积频数` <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$`累积百分比`[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+
+```{r}
+for(i in 1:nrow(table1)){
+  if(table1[i,3] < "1"){
+    table1[i,1] <- "其它"
+  }
+}
+tab2 <- table1[,c(1,2)]
+tab2[, 2] <- as.numeric(tab2$`频数`) 
+colnames(tab2) <- c("career", "Freq")
+tab3 <- ddply(tab2, .(career), summarise, Freq = sum(Freq))
+
+tab2<- as.data.frame(tab3)
+names(tab2) <- c("诊断类型", "Freq")
+#绘制条形图
+p <- ggplot(data = tab2, mapping = aes(x = 'Content', y = Freq, fill = `诊断类型`)) + geom_bar(stat = 'identity', position = 'stack', width = 1)
+label_value <- paste('(', round(tab2$Freq/sum(tab2$Freq) * 100, 1), '%)', sep = '')
+label <- paste(tab2$`诊断类型`, label_value, sep = '')
+p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + scale_fill_discrete(labels = label)
+```
+
+
+<tr>**`r fig_nums("pic14", caption = "患者诊断类型分布图")`**</tr>
+
+&emsp;&emsp;注：本数据中把诊断类型所占百分比小于1的设置为“其它”变量，以便于图形展示。
+
+&emsp;&emsp;从上表和上图看到，西医诊断的主要类型是`r table1[1,1]`，样本中主要诊断记录共`r table1[1,2]`条、约`r table1[1,3]`%；其次是`r table1[2,1]`，有`r table1[2,2]`条，约`r table1[2,3]`%,；诊断类型为`r table1[3,1]`的记录比例约为`r table1[3,3]`%。
+
+&emsp;&emsp;由于主要诊断是最终的诊断，是最精确的诊断，因此在此仅考虑主要诊断的分布情况。
+
+
+### `r chapter`.2.2 主要诊断疾病
+
+&emsp;&emsp;从上表可知，诊断类型以主要诊断为主，因此将进一步考察主要诊断的疾病类型，详细见下：
+
+<tr>**`r table_nums("tab15", caption = "主要诊断疾病分布表")`**</tr>
+
+```{r}
+data3_1 <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1$DIAGNOSIS_NAME_L2 <- as.character(data3_1$DIAGNOSIS_NAME_L2)
+temp <- as.data.frame(data3_1$DIAGNOSIS_NAME_L2)
+temp[,1] <- as.character(temp[,1])
+temp <- na.omit(temp)
+temp[temp[,1] == "" | temp[,1] == " " | is.na(temp[,1]),1] <- "缺失"
+table1 <- as.data.frame(table(temp))
+table1$pro <- round(table1$Freq/nrow(temp), 4)*100
+table1[, 1] <- as.character(table1[, 1])
+table1 <- table1[order(table1[,2],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+#table1 <- table1[table1$Freq > 40,]
+table1$`累积频数` <- 0
+colnames(table1) <- c("症状","频数","百分比","累积频数")
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$`累积频数`[i] <- summ
+}
+table1$`累积百分比` <- round(table1$`累积频数`/nrow(temp), 4)*100
+
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+&emsp;&emsp;取症状频数大于40的列出
+
+&emsp;&emsp;从上表看出，主要诊断疾病分布中，`r table1[1, 1]`占比为`r table1[1, 3]`%。
+
+### `r chapter`.2.3 西医适应症和非适应症
+
+&emsp;&emsp;`r drug_names`说明书上介绍的西医适应症包括支气管炎，扁桃体炎，细菌性痢疾等。参考说明书上的主治病症将临床西医诊断分为：适应症，包括肺部感染、气管炎、上呼吸道感染、扁桃体炎（包含急性和慢性）等；非适应症：除前述以外的其他疾病。其分布情况如下。
+
+<tr>**`r table_nums("tab16", caption = "西医适应症分布表")`**</tr>
+
+```{r}
+data3$DIAGNOSIS_NAME_L3 <- data3$DIAGNOSIS_NAME_L2
+da0$code1 <- da0$code
+parameter0 <- vector(mode = "list", length = length(select_crowd))
+bianliang <- vector(mode = "list", length = length(select_crowd))
+for(i in 1:length(select_crowd)){
+  parameter0[[i]] <- unique(da0$code[grepl(select_crowd[i],da0$code)])
+for(k in 1:length(parameter0[[i]])){
+      da0$code1[da0$code == parameter0[[i]][k]] = select_crowd[i]
+  }
+ bianliang[[i]] <- unique(da0[da0$code1==select_crowd[i],2])
+ parameter1 <- vector(mode = "list", length = length(bianliang[[i]]))
+for(l in 1:length(bianliang[[i]])){
+  parameter1[[l]][[l]] <- unique(data3$DIAGNOSIS_NAME_L2[grepl(bianliang[[i]][l],data3$DIAGNOSIS_NAME_L2)])
+if(length(parameter1[[l]][[l]]) > 0){
+  for(m in 1:length(parameter1[[l]][[l]])){
+      data3$DIAGNOSIS_NAME_L3[data3$DIAGNOSIS_NAME_L2 == parameter1[[l]][[l]][m] ] = select_crowd_explain[i]
+  }
+}
+}
+ }
+
+```
+
+
+```{r}
+dig <- 4
+zd <- as.data.frame(data3$DIAGNOSIS_NAME_L3)
+if(length(select_crowd_explain)==2){
+  zd1 <- zd[zd[,1] == select_crowd_explain[1]| zd[,1] == select_crowd_explain[2],]
+}
+if(length(select_crowd_explain)==3){
+  zd1 <- zd[zd[,1] == select_crowd_explain[1]| zd[,1] == select_crowd_explain[2]| zd[,1] == select_crowd_explain[3],]
+}
+if(length(select_crowd_explain)==4){
+  zd1 <- zd[zd[,1] == select_crowd_explain[1]| zd[,1] == select_crowd_explain[2]| zd[,1] == select_crowd_explain[3]| zd[,1] == select_crowd_explain[4],]
+}
+if(length(select_crowd_explain)==5){
+  zd1 <- zd[zd[,1] == select_crowd_explain[1]| zd[,1] == select_crowd_explain[2]| zd[,1] == select_crowd_explain[3]| zd[,1] == select_crowd_explain[4]| zd[,1] == select_crowd_explain[5],]
+}
+zd1 <- as.character(zd1)
+des2 <- as.data.frame(table(zd1))
+des2$pro <- round(des2$Freq/nrow(data3), 4)*100
+des2[, 1] <- as.character(des2[, 1])
+des2 <- des2[order(des2[,2],decreasing = TRUE), ]
+colnames(des2) <- c("诊断疾病", "频数", "总类型疾病百分比")
+table1 <- des2
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+&emsp;&emsp;从上表可知，西医适应症中`r table1[1, 1]`占比最大，为`r table1[1, 2]`%。
+
+<tr>**`r table_nums("tab17", caption = "非适应症（病人不患有适应症疾病）分布表")`**</tr>
+
+```{r}
+zd2 <- zd[zd !="肺部感染"| zd !="气管炎"|zd !="上呼吸道感染"|zd !="扁桃体炎",]
+zd2[zd2 == ""|zd2 ==" "] <- "缺失"
+zd2 <- as.character(zd2)
+des2 <- as.data.frame(table(zd2))
+des2$pro <- round(des2$Freq/nrow(data1), 4)*100
+des2[, 1] <- as.character(des2[, 1])
+des2 <- des2[des2$ Freq > 40,]
+des2 <- des2[order(des2[,2],des2[,3],decreasing = TRUE), ]
+colnames(des2) <- c("疾病", "频数", "比例（%）")
+table1 <- des2
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+&emsp;&emsp;从上表可知，西医非适应症中`r table1[1, 1]`占比最大，为`r table1[1, 2]`%。
+
+## `r chapter`.3 中医诊断
+
+&emsp;&emsp;中医诊断表中包含有`r nrow(data4)`条记录，下面对患者的这些基本信息进行统计分析，主要采用的分析方法为频数分析。
+
+### `r chapter`.3.1 中医出院主病
+
+<tr>**`r table_nums("tab18", caption = "出院主病分布表")`**</tr>
+
+```{r}
+data4$DISCHARGE_DIAGNOSIS_NAME_L2 <- as.character(data4$DISCHARGE_DIAGNOSIS_NAME_L2)
+temp <- na.omit(data4$DISCHARGE_DIAGNOSIS_NAME_L2)
+zd2 <- as.character(temp)
+des2 <- as.data.frame(table(zd2))
+des2$pro <- round(des2$Freq/nrow(data4), 4)*100
+des2[, 1] <- as.character(des2[, 1])
+des2 <- des2[order(des2[,2],decreasing = TRUE), ]
+colnames(des2) <- c("中医出院诊断", "患者人数", "比例（%）")
+table1 <- des2
+table1[nrow(table1)+1, 1] <- "合计"
+table1[nrow(table1), 2:3] <- colSums(table1[1:(nrow(table1) - 1), 2:3])
+table1[nrow(table1),3] <- 100
+
+
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 2))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 2))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+&emsp;&emsp;由上表可知，出院主病有效例数`r nrow(data4)`例，其中`r table1[1,1]`最多，占`r table1[1,3]`%；其次是`r table1[2,1]`，占`r table1[2,3]`%；再次是`r table1[3,1]`，占`r table1[3,3]`%，符合说明书。
+
+### `r chapter`.3.2 中医出院主症
+
+<tr>**`r table_nums("tab19", caption = "出院主症分布表")`**</tr>
+
+```{r}
+data4$DISCHARGE_SYMPTOM_NAME_L2 <- as.character(data4$DISCHARGE_SYMPTOM_NAME_L2)
+temp <- na.omit(data4$DISCHARGE_SYMPTOM_NAME_L2)
+zd2 <- as.character(temp)
+table1 <- as.data.frame(table(zd2))
+table1$pro <- round(table1$Freq/nrow(data4), 4)*100
+table1[, 1] <- as.character(table1[, 1])
+table1 <- table1[order(table1[,2],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+colnames(table1) <- c("中医出院主症", "患者人数", "百分比")
+table1$累积频数 <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$累积频数[i] <- summ
+}
+table1$累积百分比 <- round(table1$累积频数/nrow(data4), 4)*100
+
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 2))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 2))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+&emsp;&emsp;由上表可知，出院主症有效例数`r nrow(data4)`例，其中`r table1[1,1]`最多，占`r table1[1,3]`%；其次是`r table1[2,1]`，占`r table1[2,3]`%；再次是`r table1[3,1]`，占`r table1[3,3]`%，符合说明书。
+
+### `r chapter`.3.3 中医出院主病和中医出院主证联合分布
+
+&emsp;&emsp;在全人群中，中医出院主证和中医出院主病的联合分布情况见表20。
+
+<tr>**`r table_nums("tab20", caption = "全人群中医出院主证与中医出院主病联合分布表")`**</tr>
+
+<!-- ```{r} -->
+<!-- temp <- subset(data4, select = c('DISCHARGE_DIAGNOSIS_NAME_L2','DISCHARGE_SYMPTOM_NAME_L2')) -->
+<!-- Hmisc::label(temp[, 2]) <- " " -->
+<!-- temp1T <- compareGroups(DISCHARGE_SYMPTOM_NAME_L2 ~ DISCHARGE_DIAGNOSIS_NAME_L2, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.ylev = 1000, max.xlev = 1000) -->
+<!-- temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, -->
+<!-- show.p.overall = FALSE,  -->
+<!-- show.p.trend=FALSE, show.ratio=FALSE, sd.type = 2, q.type = c(1,2)) -->
+<!-- temp2Tab <- as.data.frame(temp1Tab$descr) -->
+<!-- temp2Tab$出院主病 <- rownames(temp2Tab) -->
+<!-- temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))] -->
+<!-- tabl <- temp2Tab -->
+<!--   for(i in 1:ncol(tabl)){ -->
+<!--     tabl[, i] <- as.character(tabl[, i]) -->
+<!--   } -->
+<!--   myft <- regulartable(tabl, col_keys = names(tabl)) -->
+<!--   myft <- theme_vanilla(myft) -->
+<!--   myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header") -->
+<!--   myft <- align(myft, align = "center", part = "all" ) -->
+<!--   myft <- border_remove(myft) -->
+<!--   myft <- hline_top(myft, part="header", border = fp_border(width = 2)) -->
+<!--   myft <- hline_bottom(myft, part="header", border = fp_border(width = 1)) -->
+<!--   myft <- hline_bottom(myft, part="body", border = fp_border(width = 2)) -->
+<!--   myft <- autofit(myft) -->
+
+<!--   myft -->
+
+<!-- ``` -->
+
+## `r chapter`.4 医嘱 
+
+&emsp;&emsp;医嘱信息表中包含有`r nrow(data5)`条记录，其中用`r drug_names`的使用记录为`r nrow(data5[data5$ORDER_ITEM_NAME_L2==drug_names,])`条，下面对患者的这些医嘱信息进行统计分析，主要采用的分析方法为频数分析。
+
+### `r chapter`.4.1 用`r drug_names`给药途径统计分析
+
+&emsp;&emsp;从医嘱表中选取使用`r drug_names`的记录，对其给药途径进行统计分析，得到下表和图：
+
+<tr>**`r table_nums("tab21", caption = "给药途径分布表")`**</tr>
+
+```{r}
+dig = 5 
+xh6 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names&!is.na(data5$ORDER_ITEM_NAME_L2),]
+xh7 <- as.character(xh6$ADMINISTRATION_NAME)
+tab <- table(xh7)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('用药途径','频数')
+colnames(tab1)=c('用药途径','百分比')
+table1 <- cbind(tab,tab1)[,-3]
+table1 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table1$累积频数 <- 0
+summ <- 0
+for(i in 1:length(table1[,2])){
+  summ <- table1[i, 2] + summ
+  table1$累积频数[i] <- summ
+}
+table1$累积百分比 <- 0
+sum1 <- 0
+for(i in 1:length(table1[,3])){
+  sum1 <- table1[i, 3] + sum1
+  table1$累积百分比[i] <- sum1
+}
+table1[nrow(table1),5] <- 100
+for(i in 1:ncol(table1)){
+  table1[, i] <- as.character(table1[, i])
+}
+myft <- regulartable(table1, 
+     col_keys = names(table1))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(table1), width =1.0)
+myft
+```
+
+### `r chapter`.4.2 用`r drug_names`在`r table1[1,1]`途径中单次使用剂量
+
+&emsp;&emsp;上一分析看出`r drug_names`给药途径以`r table1[1,1]`为主，故选取`r drug_names`通过`r table1[1,1]`途径的`r table1[1,2]`条记录，然后对其中剂量数据及单位都有效的`r table1[1,2]`条记录进行统计分析，得到下表和图：
+
+<tr>**`r table_nums("tab22", caption ="单次使用剂量分布表（mg）")`**</tr>
+
+```{r}
+xh6_1 <- xh6[xh6$ADMINISTRATION_NAME==table1[1,1],]
+jiliang <- as.numeric(xh6_1$DOSAGE)
+des <- as.data.frame(psych::describe(jiliang))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(xh6_1)-des$vars
+des <- round(des,dig=2)
+da=c(jiliang)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des,  col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:7, width = 0.8)
+myft
+```
+
+```{r}
+ggplot(xh6_1, aes(x=jiliang)) +
+  geom_histogram(position = "identity", binwidth = 1, aes(y = ..density..),alpha = 1)+   
+  geom_density() + 
+  labs(list(title = "", x = "单次给药剂量", y = "密度")) +
+  theme(axis.text.y= element_text(size=15,  vjust=0.5, hjust=0.5))
+meanjiling <- na.omit(as.numeric(xh6_1$DOSAGE))
+```
+
+<tr>**`r fig_nums("pic15", caption ="单次使用剂量分布图")`**</tr>
+
+&emsp;&emsp;从表22和图14看到，有效的`r nrow(xh6_1)`条记录中，单次使用剂量平均值为`r mean(meanjiling)`mg，中位数`r median(meanjiling)`mg，最小值为`r min(meanjiling)`mg，最大值为`r max(meanjiling)`mg。
+
+<tr>**`r table_nums("tab23", caption = "单次使用剂量分段统计表")`**</tr>
+
+```{r}
+dig <- 4
+jlfd <- as.numeric(xh6_1$DOSAGE)
+xh6_1$jlfd1[jlfd < 0 | is.na(jlfd)] <- "缺失"
+xh6_1$jlfd1[jlfd >= 0 & jlfd <= pdose[1]] <- pdosesection[1]
+xh6_1$jlfd1[jlfd > pdose[1] & jlfd <= pdose[2] ] <- pdosesection[2]
+
+if(length(pdose) == 3){
+xh6_1$jlfd1[jlfd > pdose[2] & jlfd <= pdose[3]] <- pdosesection[3]
+xh6_1$jlfd1[jlfd > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+xh6_1$jlfd1[jlfd > pdose[3] & jlfd <= pdose[4]] <- pdosesection[4]
+xh6_1$jlfd1[jlfd > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+xh6_1$jlfd1[jlfd > pdose[4] & jlfd <= pdose[5]] <- pdosesection[5]
+xh6_1$jlfd1[jlfd > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+xh6_1$jlfd1[jlfd > pdose[5] & jlfd <= pdose[6]] <- pdosesection[6]
+xh6_1$jlfd1[jlfd > pdose[6]] <- pdosesection[7]
+}
+
+jlfd1 <- xh6_1$jlfd1
+tab <- table(jlfd1)
+tab1 <-round(prop.table(tab),dig)#round四舍五入取整
+tab <- as.data.frame(tab)
+tab1 <- as.data.frame(tab1)
+tab1$Freq1 <- tab1$Freq*100
+tab1 <- tab1[, -2]
+colnames(tab)=c('单次使用剂量(mg)','频数')
+colnames(tab1)=c('单次使用剂量(mg)','百分比')
+
+table1 <- cbind(tab,tab1)[,-3]
+table1[, 1] <- as.character(table1[, 1])
+table1 <- as.data.frame(table1)
+table2 <- table1[order(table1[,2],table1[,3],decreasing = TRUE), ]
+table2[nrow(table2)+1, 1] <- "合计"
+table2[nrow(table2), 2:3] <- colSums(table2[1:(nrow(table2) - 1), 2:3])
+table2[nrow(table2),3] = 100
+
+for(i in 1:ncol(table2)){
+  table2[, i] <- as.character(table2[, i])
+}
+myft <- regulartable(table2, 
+     col_keys = names(table2))
+myft <- set_header_labels(myft )
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:3, width = 1.5)
+myft
+```
+
+```{R}
+table3 <- as.data.frame(table(xh6_1$jlfd1))
+ggplot(table3,aes(x=table3[,1],y=table3[,2],fill=Freq)) +
+geom_bar(stat="identity")+ geom_text(aes(label=table3[,2]),size=5,position=position_dodge(0.1),width=0.5, vjust=-0.25)+ theme(axis.title.x =element_text(size=14), axis.title.y=element_text(size=14)) +theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5))+
+xlab("") + ylab("")
+```
+
+<tr>**`r fig_nums("pic16", caption = "单次使用剂量分段柱形图")`**</tr>
+
+&emsp;&emsp;从上表23和图15可见，剂量基本分布在`r table2[1,1]`， `r table2[2,1]`的记录数最多，有`r  sum(as.numeric(table2[1,2]) +as.numeric(table2[2,2]))` 条。`r table1[1,1]`的正常剂量为XXXXX，而数据中低/高于说明书低/高限的记录占到很大比例，说明`r drug_names``r table1[1,1]`临床实际使用的剂量总体偏低/高。
+
+### `r chapter`.4.3 `r drug_names`连续医嘱用药天数
+
+```{r}
+data6$STOP_DATE_TIME <- as.Date(data6$STOP_DATE_TIME, "%Y-%m-%d")
+data6$START_DATE_TIME <- as.Date(data6$START_DATE_TIME, "%Y-%m-%d")
+times <- as.data.frame(data6$STOP_DATE_TIME - data6$START_DATE_TIME)
+times1 <- as.data.frame(na.omit(times[times$`data6$STOP_DATE_TIME - data6$START_DATE_TIME` > 0,]))
+```
+
+
+&emsp;&emsp;选取`r drug_names`符合连续医嘱的记录，共`r nrow(times1)`条，对其连续医嘱用药天数进行统计分析，见下表24及下图16。
+
+<tr>**`r table_nums("tab24", caption = "连续医嘱用药天数")`**</tr>
+
+```{r}
+times1 <- sapply(times1, as.numeric)
+des <- as.data.frame(psych::describe(times1))
+des <- des[,-c(6:7, 10:13)]
+des$vars <- des$n
+des$n <- nrow(times1)-des$vars
+des <- round(des,dig=2)
+da=c(times1)
+a <- t.test(da)
+b <- as.vector(a$conf.int)
+b <- round(b,dig=2)
+des[,8:9] <- b
+
+for(i in 1:ncol(des)){
+  des[, i] <- as.character(des[, i])
+}
+myft <- regulartable(des, 
+     col_keys = names(des))
+myft <- set_header_labels(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值",V8 = "下界", V9 = "上界" )
+myft <- add_header(myft, vars = "N", n = "缺失", mean = "均值",
+                          sd = "标准差", median = "中位数", min = "最小值",
+                          max = "最大值", V8 = "95%CI", V9 = "95%CI",top = TRUE)
+myft <- merge_h(myft, part = "header")
+myft <- merge_v(myft, part = "header")
+myft <- theme_vanilla(myft)
+myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+myft <- align(myft, align = "center", part = "all" )
+myft <- border_remove(myft)
+myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+myft <- autofit(myft)
+myft <- width(myft,j = 1:ncol(des), width =1.0)
+myft
+```
+
+```{r}
+times <- as.vector(data6$STOP_DATE_TIME - data6$START_DATE_TIME)
+ggplot(data6, aes(x=times)) +
+  geom_histogram(position = "identity", binwidth = 1, aes(y = ..density..),
+  alpha = 0.5) + geom_density() +
+  labs(list(title = "", x = "连续医嘱用药天数", y = "密度")) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+<tr>**`r fig_nums("pic17", caption = "连续医嘱用药天数直方图")`**</tr>
+
+## `r chapter`.5 全人群交叉描述
+
+### `r chapter`.5.1 `r select_crowd_explain[1]`人群
+
+&emsp;&emsp;在`r nrow(data1)`例患者记录中，选取诊断为`r select_crowd_explain[1]`的人群，对`r select_crowd_explain[1]`人群使用了`r drug_names`的疗效做一个描述。
+
+
+
+```{r}
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- subset(data3, DIAGNOSIS_NAME_L3 == select_crowd_explain[1] & TREATING_RESULT_NAME == outcome[1] & data3$DIAGNOSIS_TYPE_NAME == "主要诊断")
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[1])`例主要诊断为`r select_crowd_explain[1]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治愈，治疗天数和用药剂量如下：
+
+```{r}
+data5_2 <- subset(data5,ORDER_ITEM_NAME_L2 == drug_names)
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 0 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:ncol(temp2Tab)-1)]
+tabl <- temp2Tab
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+ myft <- add_header(myft, "剂量" = "治愈", "[ALL]" = "治愈",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  }
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，治愈人数最多。
+
+```{r}
+if(length(outcome)>1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[1] & data3$TREATING_RESULT_NAME == outcome[2]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[1])`例主要诊断为`r select_crowd_explain[1]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人好转，治疗天数和用药剂量如下：
+
+```{r}
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  myft <- add_header(myft, "剂量" = "好转", "[ALL]" = "好转",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  }
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，好转人数最多。
+
+```{r}
+if(length(outcome)>2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[1] & data3$TREATING_RESULT_NAME == outcome[3]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[1])`例主要诊断为`r select_crowd_explain[1]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人死亡，治疗天数和用药剂量如下：
+
+```{r}
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "死亡", "[ALL]" = "死亡",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  
+  }
+```
+
+```{r}
+if(length(outcome)>3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[1] & data3$TREATING_RESULT_NAME == outcome[4]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[1])`例主要诊断为`r select_crowd_explain[1]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  }
+```
+
+```{r}
+if(length(outcome)>4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[1] & data3$TREATING_RESULT_NAME == outcome[5]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[1])`例主要诊断为`r select_crowd_explain[1]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  }
+```
+
+
+### `r chapter`.5.2 `r select_crowd_explain[2]`人群
+
+&emsp;&emsp;在`r nrow(data1)`例患者记录中，选取诊断为`r select_crowd_explain[2]`的人群，对`r select_crowd_explain[2]`人群使用了`r drug_names`的疗效做一个描述。
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- subset(data3, DIAGNOSIS_NAME_L3 == select_crowd_explain[2] & TREATING_RESULT_NAME == outcome[1] & data3$DIAGNOSIS_TYPE_NAME == "主要诊断")
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[2])`例主要诊断为`r select_crowd_explain[2]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治愈，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data5_2 <- subset(data5,ORDER_ITEM_NAME_L2 == drug_names)
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 0 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:ncol(temp2Tab)-1)]
+tabl <- temp2Tab
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+ myft <- add_header(myft, "剂量" = "治愈", "[ALL]" = "治愈",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，治愈人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 1){
+if(length(outcome)>1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[2] & data3$TREATING_RESULT_NAME == outcome[2]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[2])`例主要诊断为`r select_crowd_explain[2]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人好转，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  myft <- add_header(myft, "剂量" = "好转", "[ALL]" = "好转",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，好转人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 1){
+if(length(outcome)>2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[2] & data3$TREATING_RESULT_NAME == outcome[3]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[2])`例主要诊断为`r select_crowd_explain[2]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人死亡，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "死亡", "[ALL]" = "死亡",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 1){
+if(length(outcome)>3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[2] & data3$TREATING_RESULT_NAME == outcome[4]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[2])`例主要诊断为`r select_crowd_explain[2]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 1){
+if(length(outcome)>4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[2] & data3$TREATING_RESULT_NAME == outcome[5]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[2])`例主要诊断为`r select_crowd_explain[2]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 1){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+### `r chapter`.5.3 `r select_crowd_explain[3]`人群
+
+&emsp;&emsp;在`r nrow(data1)`例患者记录中，选取诊断为`r select_crowd_explain[3]`的人群，对`r select_crowd_explain[3]`人群使用了`r drug_names`的疗效做一个描述。
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- subset(data3, DIAGNOSIS_NAME_L3 == select_crowd_explain[3] & TREATING_RESULT_NAME == outcome[1] & data3$DIAGNOSIS_TYPE_NAME == "主要诊断")
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[3])`例主要诊断为`r select_crowd_explain[3]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治愈，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data5_2 <- subset(data5,ORDER_ITEM_NAME_L2 == drug_names)
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 0 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:ncol(temp2Tab)-1)]
+tabl <- temp2Tab
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+ myft <- add_header(myft, "剂量" = "治愈", "[ALL]" = "治愈",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，治愈人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 2){
+if(length(outcome)>1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[3] & data3$TREATING_RESULT_NAME == outcome[2]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[3])`例主要诊断为`r select_crowd_explain[3]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人好转，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  myft <- add_header(myft, "剂量" = "好转", "[ALL]" = "好转",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，好转人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 2){
+if(length(outcome)>2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[3] & data3$TREATING_RESULT_NAME == outcome[3]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[3])`例主要诊断为`r select_crowd_explain[3]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人死亡，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "死亡", "[ALL]" = "死亡",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 2){
+if(length(outcome)>3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[3] & data3$TREATING_RESULT_NAME == outcome[4]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[3])`例主要诊断为`r select_crowd_explain[3]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 2){
+if(length(outcome)>4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[3] & data3$TREATING_RESULT_NAME == outcome[5]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[3])`例主要诊断为`r select_crowd_explain[3]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 2){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+### `r chapter`.5.4 `r select_crowd_explain[4]`人群
+
+&emsp;&emsp;在`r nrow(data1)`例患者记录中，选取诊断为`r select_crowd_explain[4]`的人群，对`r select_crowd_explain[4]`人群使用了`r drug_names`的疗效做一个描述。
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- subset(data3, DIAGNOSIS_NAME_L3 == select_crowd_explain[4] & TREATING_RESULT_NAME == outcome[1] & data3$DIAGNOSIS_TYPE_NAME == "主要诊断")
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[4])`例主要诊断为`r select_crowd_explain[4]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治愈，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data5_2 <- subset(data5,ORDER_ITEM_NAME_L2 == drug_names)
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 0 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:ncol(temp2Tab)-1)]
+tabl <- temp2Tab
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+ myft <- add_header(myft, "剂量" = "治愈", "[ALL]" = "治愈",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，治愈人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 3){
+if(length(outcome)>1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[4] & data3$TREATING_RESULT_NAME == outcome[2]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[4])`例主要诊断为`r select_crowd_explain[4]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人好转，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  myft <- add_header(myft, "剂量" = "好转", "[ALL]" = "好转",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，好转人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 3){
+if(length(outcome)>2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[4] & data3$TREATING_RESULT_NAME == outcome[3]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[4])`例主要诊断为`r select_crowd_explain[4]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人死亡，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "死亡", "[ALL]" = "死亡",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 3){
+if(length(outcome)>3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[4] & data3$TREATING_RESULT_NAME == outcome[4]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[4])`例主要诊断为`r select_crowd_explain[4]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 3){
+if(length(outcome)>4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[4] & data3$TREATING_RESULT_NAME == outcome[5]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[4])`例主要诊断为`r select_crowd_explain[4]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 3){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+### `r chapter`.5.5 `r select_crowd_explain[5]`人群
+
+&emsp;&emsp;在`r nrow(data1)`例患者记录中，选取诊断为`r select_crowd_explain[5]`的人群，对`r select_crowd_explain[5]`人群使用了`r drug_names`的疗效做一个描述。
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- subset(data3, DIAGNOSIS_NAME_L3 == select_crowd_explain[5] & TREATING_RESULT_NAME == outcome[1] & data3$DIAGNOSIS_TYPE_NAME == "主要诊断")
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[5])`例主要诊断为`r select_crowd_explain[5]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治愈，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data5_2 <- subset(data5,ORDER_ITEM_NAME_L2 == drug_names)
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 0 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:ncol(temp2Tab)-1)]
+tabl <- temp2Tab
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+ myft <- add_header(myft, "剂量" = "治愈", "[ALL]" = "治愈",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，治愈人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 4){
+if(length(outcome)>1){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[5] & data3$TREATING_RESULT_NAME == outcome[2]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[5])`例主要诊断为`r select_crowd_explain[5]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人好转，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  myft <- add_header(myft, "剂量" = "好转", "[ALL]" = "好转",  top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+&emsp;&emsp;由上表可见，用药剂量XXXXX，治疗天数为XXX天，好转人数最多。
+
+```{r}
+if(length(select_crowd_explain) > 4){
+if(length(outcome)>2){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[5] & data3$TREATING_RESULT_NAME == outcome[3]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[5])`例主要诊断为`r select_crowd_explain[5]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人死亡，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "死亡", "[ALL]" = "死亡",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+  
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 4){
+if(length(outcome)>3){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[5] & data3$TREATING_RESULT_NAME == outcome[4]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[5])`例主要诊断为`r select_crowd_explain[5]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+```{r}
+if(length(select_crowd_explain) > 4){
+if(length(outcome)>4){
+data3_temp <- data3[data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+data3_1 <- data3[data3$DIAGNOSIS_NAME_L3 == select_crowd_explain[5] & data3$TREATING_RESULT_NAME == outcome[5]  & data3$DIAGNOSIS_TYPE_NAME == "主要诊断",]
+}
+}
+```
+
+&emsp;&emsp;在`r sum(data3_temp$DIAGNOSIS_NAME_L3 == select_crowd_explain[5])`例主要诊断为`r select_crowd_explain[5]`的人群中，使用`r drug_names`后`r nrow(data3_1)`人治疗效果为其他，治疗天数和用药剂量如下：
+
+```{r}
+if(length(select_crowd_explain) > 4){
+data5_2 <- data5[data5$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data3_1$TREAT_DAYS <- as.numeric(data3_1$TREAT_DAYS)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3_1$fzy[data3_1$TREAT_DAYS >= 1 & data3_1$TREAT_DAYS < 2] <- "1-2天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 2 & data3_1$TREAT_DAYS < 3] <- "2-3天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 3 & data3_1$TREAT_DAYS < 7] <- "3-7天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 8 & data3_1$TREAT_DAYS < 14] <- "8-14天"
+data3_1$fzy[data3_1$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3_1, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 2){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = "其它", "[ALL]" = "其它",top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+}
+```
+
+### `r chapter`.5.6 疗程、剂量与年龄的交叉描述
+
+```{r}
+data1_agec <- data1[data1$AGE >=0 & data1$AGE <= agesection[1] & !is.na(data1$AGE) & data1$AGE != "NA",]
+```
+
+&emsp;&emsp;在`r nrow(data1)`样本中，选取年龄`r age_section[1]`患者`r nrow(data1_agec)`人，在使用`r drug_names`的剂量与疗程的交叉描述。
+
+```{r}
+data5_1 <- data5[data5$PATIENT_VISITID_ENCRYPT  %in% data1_agec$PATIENT_VISITID_ENCRYPT , ]
+data5_2 <- data5_1[data5_1$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3$TREAT_DAYS <- as.numeric(data3$TREAT_DAYS)
+data3$fzy[data3$TREAT_DAYS >= 1 & data3$TREAT_DAYS < 2] <- "1-2天"
+data3$fzy[data3$TREAT_DAYS >= 2 & data3$TREAT_DAYS < 3] <- "2-3天"
+data3$fzy[data3$TREAT_DAYS >= 3 & data3$TREAT_DAYS < 7] <- "3-7天"
+data3$fzy[data3$TREAT_DAYS >= 8 & data3$TREAT_DAYS < 14] <- "8-14天"
+data3$fzy[data3$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 5){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = age_section[1], "[ALL]" = age_section[1] ,top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+```
+
+&emsp;&emsp;由上表可见，`r age_section[1]`的患者用药剂量在XXXXX，治疗天数为XXX天，人数最多。
+
+```{r}
+data1_agec <- data1[data1$AGE > agesection[1] & data1$AGE <= agesection[2] & !is.na(data1$AGE) & data1$AGE != "NA",]
+```
+
+&emsp;&emsp;在`r nrow(data1)`样本中，选取年龄`r age_section[2]`患者`r nrow(data1_agec)`人，在使用`r drug_names`的剂量与疗程的交叉描述。
+
+```{r}
+data5_1 <- data5[data5$PATIENT_VISITID_ENCRYPT  %in% data1_agec$PATIENT_VISITID_ENCRYPT , ]
+data5_2 <- data5_1[data5_1$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3$TREAT_DAYS <- as.numeric(data3$TREAT_DAYS)
+data3$fzy[data3$TREAT_DAYS >= 1 & data3$TREAT_DAYS < 2] <- "1-2天"
+data3$fzy[data3$TREAT_DAYS >= 2 & data3$TREAT_DAYS < 3] <- "2-3天"
+data3$fzy[data3$TREAT_DAYS >= 3 & data3$TREAT_DAYS < 7] <- "3-7天"
+data3$fzy[data3$TREAT_DAYS >= 8 & data3$TREAT_DAYS < 14] <- "8-14天"
+data3$fzy[data3$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 5){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = age_section[2], "[ALL]" = age_section[2], top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+```
+
+&emsp;&emsp;由上表可见，`r age_section[2]`的患者用药剂量在XXXXX，治疗天数为XXX天，人数最多。
+
+```{r}
+data1_agec <- data1[data1$AGE > agesection[2] & data1$AGE <= agesection[3] & !is.na(data1$AGE) & data1$AGE != "NA",]
+```
+
+&emsp;&emsp;在`r nrow(data1)`样本中，选取年龄`r age_section[3]`患者`r nrow(data1_agec)`人，在使用`r drug_names`的剂量与疗程的交叉描述。
+
+```{r}
+data5_1 <- data5[data5$PATIENT_VISITID_ENCRYPT  %in% data1_agec$PATIENT_VISITID_ENCRYPT , ]
+data5_2 <- data5_1[data5_1$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3$TREAT_DAYS <- as.numeric(data3$TREAT_DAYS)
+data3$fzy[data3$TREAT_DAYS >= 1 & data3$TREAT_DAYS < 2] <- "1-2天"
+data3$fzy[data3$TREAT_DAYS >= 2 & data3$TREAT_DAYS < 3] <- "2-3天"
+data3$fzy[data3$TREAT_DAYS >= 3 & data3$TREAT_DAYS < 7] <- "3-7天"
+data3$fzy[data3$TREAT_DAYS >= 8 & data3$TREAT_DAYS < 14] <- "8-14天"
+data3$fzy[data3$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 5){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = age_section[3], "[ALL]" = age_section[3], top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+```
+
+&emsp;&emsp;由上表可见，`r age_section[3]`的患者用药剂量在XXXXX，治疗天数为XXX天，人数最多。
+
+```{r}
+data1_agec <- data1[data1$AGE > agesection[3] & data1$AGE <= agesection[4] & !is.na(data1$AGE) & data1$AGE != "NA",]
+```
+
+&emsp;&emsp;在`r nrow(data1)`样本中，选取年龄在`r age_section[4]`患者`r nrow(data1_agec)`人，在使用`r drug_names`的剂量与疗程的交叉描述。
+
+```{r}
+data5_1 <- data5[data5$PATIENT_VISITID_ENCRYPT  %in% data1_agec$PATIENT_VISITID_ENCRYPT , ]
+data5_2 <- data5_1[data5_1$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3$TREAT_DAYS <- as.numeric(data3$TREAT_DAYS)
+data3$fzy[data3$TREAT_DAYS >= 1 & data3$TREAT_DAYS < 2] <- "1-2天"
+data3$fzy[data3$TREAT_DAYS >= 2 & data3$TREAT_DAYS < 3] <- "2-3天"
+data3$fzy[data3$TREAT_DAYS >= 3 & data3$TREAT_DAYS < 7] <- "3-7天"
+data3$fzy[data3$TREAT_DAYS >= 8 & data3$TREAT_DAYS < 14] <- "8-14天"
+data3$fzy[data3$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 5){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = age_section[4], "[ALL]" = age_section[4], top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+```
+
+&emsp;&emsp;由上表可见，`r age_section[4]`的患者用药剂量在XXXXX，治疗天数为大于XXX天，人数最多。
+
+```{r}
+data1_agec <- data1[data1$AGE > agesection[4] & !is.na(data1$AGE) & data1$AGE != "NA",]
+```
+
+&emsp;&emsp;在`r nrow(data1)`样本中，选取年龄`r age_section[5]`患者`r nrow(data1_agec)`人，在使用`r drug_names`的剂量与疗程的交叉描述。
+
+```{r}
+data5_1 <- data5[data5$PATIENT_VISITID_ENCRYPT  %in% data1_agec$PATIENT_VISITID_ENCRYPT , ]
+data5_2 <- data5_1[data5_1$ORDER_ITEM_NAME_L2 == drug_names,]
+data5_2$DOSAGE <- as.numeric(data5_2$DOSAGE)
+data5_2$jl[data5_2$DOSAGE  < 0 | is.na(data5_2$DOSAGE)] <- "缺失"
+data5_2$jl[data5_2$DOSAGE >= 0 & data5_2$DOSAGE <= pdose[1]] <- pdosesection[1]
+data5_2$jl[data5_2$DOSAGE > pdose[1] & data5_2$DOSAGE <= pdose[2]] <- pdosesection[2]
+if(length(pdose) == 3){
+data5_2$jl[data5_2$DOSAGE > pdose[2] & data5_2$DOSAGE <= pdose[3]] <- pdosesection[3]
+data5_2$jl[data5_2$DOSAGE > pdose[3]] <- pdosesection[4]
+}
+if(length(pdose) == 4){
+data5_2$jl[data5_2$DOSAGE > pdose[3] & data5_2$DOSAGE <= pdose[4]] <- pdosesection[4]
+data5_2$jl[data5_2$DOSAGE > pdose[4]] <- pdosesection[5]
+}
+if(length(pdose) == 5){
+data5_2$jl[data5_2$DOSAGE > pdose[4] & data5_2$DOSAGE <= pdose[5]] <- pdosesection[5]
+data5_2$jl[data5_2$DOSAGE > pdose[5]] <- pdosesection[6]
+}
+if(length(pdose) == 6){
+data5_2$jl[data5_2$DOSAGE > pdose[5] & data5_2$DOSAGE <= pdose[6]] <- pdosesection[6]
+data5_2$jl[data5_2$DOSAGE > pdose[6]] <- pdosesection[7]
+}
+data3$TREAT_DAYS <- as.numeric(data3$TREAT_DAYS)
+data3$fzy[data3$TREAT_DAYS >= 1 & data3$TREAT_DAYS < 2] <- "1-2天"
+data3$fzy[data3$TREAT_DAYS >= 2 & data3$TREAT_DAYS < 3] <- "2-3天"
+data3$fzy[data3$TREAT_DAYS >= 3 & data3$TREAT_DAYS < 7] <- "3-7天"
+data3$fzy[data3$TREAT_DAYS >= 8 & data3$TREAT_DAYS < 14] <- "8-14天"
+data3$fzy[data3$TREAT_DAYS >= 15 ] <- ">15天"
+zb <- dplyr::left_join(data3, data5_2[, c("PATIENT_VISITID_ENCRYPT", "jl")],by = "PATIENT_VISITID_ENCRYPT")
+
+temp <- na.omit(subset(zb, select = c('fzy','jl')))
+if(nrow(temp) < 5){
+  print("治疗天数或者用药剂量数据缺失，无法分析")
+}else {
+Hmisc::label(temp[, 2]) <- " "
+temp1T <- compareGroups(fzy ~ jl, data = temp, method = 3, alpha= 0.01, simplify = FALSE, ref = 2, max.xlev = 100)
+temp1Tab <- createTable(temp1T, type = 2, digits=2, show.all=TRUE, show.p.trend=FALSE,show.p.overall = FALSE,  show.ratio=FALSE, sd.type = 2, q.type = c(1,2))
+temp2Tab <- as.data.frame(temp1Tab$descr)
+temp2Tab$`剂量` <- rownames(temp2Tab)
+temp2Tab <- temp2Tab[,c(ncol(temp2Tab),1:(ncol(temp2Tab)-1))]
+tabl <- temp2Tab
+  
+  for(i in 1:ncol(tabl)){
+    tabl[, i] <- as.character(tabl[, i])
+  }
+  myft <- regulartable(tabl, 
+       col_keys = names(tabl))
+  
+  myft <- add_header(myft, "剂量" = age_section[5], "[ALL]" = age_section[5], ">15天" = age_section[5],top = TRUE)
+  myft <- merge_h(myft, part = "header")
+  myft <- merge_v(myft, part = "header")
+  myft <- theme_vanilla(myft)
+  myft <- bg(myft, i = 1:2, bg = "#ADADAD", part = "header")
+  myft <- align(myft, align = "center", part = "all" )
+  myft <- border_remove(myft)
+  myft <- hline_top(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "header", border = fp_border(width = 1))
+  myft <- hline(myft, i = 1, part = "header", border = fp_border(width = 1))
+  myft <- hline_bottom(myft, part = "body", border = fp_border(width = 1))
+  myft <- autofit(myft)
+  myft <- width(myft,j = 1:ncol(tabl), width = 1)
+  myft
+}
+```
+
+&emsp;&emsp;由上表可见，`r age_section[5]`的患者用药剂量在XXXXX，治疗天数为XXX天，人数最多。
