@@ -1,5 +1,6 @@
 ---
-output: word_document
+output:
+  word_document: default
 ---
 ```{r setup, include=FALSE}
 
@@ -12,10 +13,13 @@ library(scales)
 library(ggthemes)
 library(grid)
 library(xlsx)
-setwd("C:\\Users\\zzslkbc\\Desktop\\xuexi\\2019数据")
-xcdb <-read.xlsx2("妇科痛经适用性调查.xlsx", sheetName = "Sheet0")
-fksysj <-read.xlsx2("妇科痛经适用性调查.xlsx", sheetName ="Sheet0")
-DN <- "妇科痛经"
+#setwd("C:\\Users\\zzslkbc\\Desktop\\xuexi\\2019数据")
+setwd("D:/项目/201909 中医诊疗指南")
+DN <- "儿科哮喘"
+xcdb <-read.xlsx2(paste(DN, "适用性调查.xlsx", sep=""), 
+                  sheetName = "Sheet0", startRow=2)
+fksysj <-read.xlsx2(paste(DN, "适用性调查.xlsx", sep=""), 
+                    sheetName ="Sheet0", startRow=2)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -25,37 +29,32 @@ title: "2013年`r unique(DN)`标准适用性与应用性评价统计报告"
 output: word_document
 ---
 
-#适用性评价
+# 适用性评价
 
-##一
+## 一
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;标准适用性评价包括被调查医生对标准的熟悉和使用情况、标准的质量水平、应用情况、意见建议等内容。
 
-##（一）基本信息——指南熟悉和使用情况
+## （一）基本信息——指南熟悉和使用情况
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;分析被调查医生对“`r DN`”标准的熟悉程度和使用情况。
 
-###**1.整体情况**  
+### **1.整体情况**  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;分析全部医生整体对标准的熟悉和使用情况，熟悉情况和使用情况的评分如下图所示。（见图1）
 
 ```{r 图1,echo=FALSE,message=FALSE,fig.height=8,fig.width=6}
 
+colnames(xcdb) <- gsub("\\.", "", colnames(xcdb))
+
 aa <- colnames(xcdb)
 bb <- aa[grepl("评分", aa)]
-bb <- as.data.frame(bb)
-bb <- as.data.frame(bb[(bb[, 1] != "是否熟悉修订前中医病证诊断疗效标准的内容的评分"), 1])
-bb <- as.data.frame(bb[(bb[, 1] != "是否使用过修订前中医病证诊断疗效标准内容的评分"), 1])
-names(bb) <- "问题合集"
-names.a<-bb$问题合集
+names.a <- bb[bb!="是否熟悉修订前中医病证诊断疗效标准的内容的评分" &
+                bb!="是否使用过修订前中医病证诊断疗效标准内容的评分"]
 
-xxx1 <- gsub("奟", replacement =DN, "奟标准使用的病名是否准确的评分")
-aaa1 <- which(names.a==xxx1)
-xxx2<- gsub("奟", replacement =DN, "奟标准修订草案的疗效评价方法是否合理的评分")
-aaa2 <- which(names.a==xxx2)
-xxx3 <- gsub("奟", replacement =DN, "奟标准的适用范围是否明确评分")
-aaa3 <- which(names.a==xxx3)
-xxx4 <- gsub("奟", replacement =DN, "奟标准的整体适用性评分")
-aaa4 <- which(names.a==xxx4)
+aaa1 <- which(names.a==paste(DN, "标准使用的病名是否准确的评分", sep=""))
+aaa2 <- which(names.a==paste(DN, "标准修订草案的疗效评价方法是否合理的评分", sep=""))
+aaa3 <- which(names.a==paste(DN, "标准的适用范围是否明确评分", sep=""))
+aaa4 <- which(names.a==paste(DN, "标准的整体适用性评分", sep=""))
 
 sxdc <- as.data.frame(xcdb[,c(1,5,8,10)])
 sxdc1<- as.data.frame(xcdb[,c(1,8,10)])
@@ -96,24 +95,17 @@ sxdc$使用情况<-as.numeric(sxdc$使用情况)
 
 for (i in 1:length(sxdc$熟悉情况)) {
   if(sxdc$熟悉情况[i]>=6){
-  sxdc$熟悉情况[i]="是"
+    sxdc$熟悉情况[i]="是"
+  }else{
+    sxdc$熟悉情况[i]="否"
   }
-}
-for (i in 1:length(sxdc$熟悉情况)) {
-  if(sxdc$熟悉情况[i]<=5){
-  sxdc$熟悉情况[i]="否"
-  }
-}
-for (i in 1:length(sxdc$使用情况)) {
   if(sxdc$使用情况[i]>=6){
-  sxdc$使用情况[i]="是"
+    sxdc$使用情况[i]="是"
+  }else{
+    sxdc$使用情况[i]="否"
   }
 }
-for (i in 1:length(sxdc$使用情况)) {
-  if(sxdc$使用情况[i]<=5){
-  sxdc$使用情况[i]="否"
-  }
-}
+
 ```
  
 
@@ -142,7 +134,7 @@ p+theme_classic()+ylab('比例')+xlab("")+
 
 
 
-###**2.不同职称的熟悉和使用情况
+### **2.不同职称的熟悉和使用情况**
 
 
 ```{r ,echo=FALSE,message=FALSE,fig.height=8,fig.width=11}
@@ -154,16 +146,6 @@ ss1 <- filter(ss1,ss1$Var3!='')
 ss1$Var4 <- round(ss1$是/(ss1$否+ss1$是),4)*100
 
 ss1$Var5 <- ss1$否+ss1$是
-
-ss1$Var3 <- as.character(ss1$Var3)
-for (i in 1:nrow(ss1)){
-  if (ss1[i,3]=="初级"){
-    ss1[i,3] <- substr(ss1[i,3],1,nchar(ss1[i,3])-1)
-  }
-  if (ss1[i,3]=="中级"){
-    ss1[i,3] <- substr(ss1[i,3],1,nchar(ss1[i,3])-1)
-  }
-}
 
 wz1 <- which(ss1$Var4==max(ss1$Var4),arr.ind=F)
 max1 <- ''
@@ -186,16 +168,6 @@ ss2 <- unstack(s2,Freq~Var2)
 ss2$Var3 <- s2[1:length.POSIXlt(ss2),1]
 ss2 <- filter(ss2,Var3!='')
 ss2$Var4 <- round(ss2$是/(ss2$是+ss2$否),4)*100
-
-ss2$Var3 <- as.character(ss2$Var3)
-for (i in 1:nrow(ss2)){
-  if (ss2[i,3]=="初级"){
-    ss2[i,3] <- substr(ss2[i,3],1,nchar(ss2[i,3])-1)
-  }
-  if (ss2[i,3]=="中级"){
-    ss2[i,3] <- substr(ss2[i,3],1,nchar(ss2[i,3])-1)
-  }
-}
 
 wz2 <- which(ss2$Var4==max(ss2$Var4),arr.ind=T)
 max2 <- ''
@@ -265,10 +237,10 @@ guides(size = FALSE)
 
 
 
-##（二）专业技术水平
+## （二）专业技术水平
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;标准的专业技术水品评价包括病症诊断内容和疗效评价内容。
 
-###**1.病症诊断内容
+### **1.病症诊断内容**
 
 ```{r ,echo=FALSE,message=FALSE,fig.height=49,fig.width=35}
 names.a <- as.character(names.a)
@@ -293,7 +265,7 @@ p <- ggplot(xctm1,aes(x =value,y =per2,fill = value))+
 p+ylab('频率')+xlab(" ")
     
 ```
-###**2.疗效评价内容
+### **2.疗效评价内容**
 ```{r ,echo=FALSE,message=FALSE,fig.height=15,fig.width=12}
 names.2 <- names.a[aaa2:aaa3-1]
 xctm <- subset(xcdb,select = names.2)
@@ -320,9 +292,9 @@ p+ylab('频率')+xlab(" ")
 
 ```
 
-##（三）整体质量水平及适用性 
+## （三）整体质量水平及适用性 
 
-###**1.整体质量水平
+### **1.整体质量水平**
 ```{r ,echo=FALSE,message=FALSE,fig.height=20,fig.width=12}
 names.3 <- names.a[aaa3:aaa4-1]
 xctm <- subset(xcdb,select = names.3)
@@ -346,7 +318,7 @@ p <- ggplot(xctm1,aes(x =value,y =per2,fill = value))+
 p+ylab('频率')+xlab(" ")
 
 ```
-###**2.适用性评价
+### **2.适用性评价**
 ```{r ,echo=FALSE,message=FALSE,fig.height=5,fig.width=6}
 names.4 <- names.a[aaa4:aaa4]
 xctm <- subset(xcdb,select = names.4)
@@ -370,11 +342,11 @@ p <- ggplot(xctm1,aes(x =value,y =per2,fill = value))+
 p+ylab('频率')+xlab("")
 
 ```
-##（四）意见建议
+## （四）意见建议
 
 ```{r ,echo=FALSE,message=FALSE,fig.height=5,fig.width=7}
 Main <- paste('图6 ','意见建议:标准最需要改进的地方',sep='') 
-teat <- unlist(strsplit(as.character(xcdb$X.中医病证诊断疗效标准.修订草案的应用建议的报批或评价形式),'|',fixed = TRUE))
+teat <- unlist(strsplit(as.character(xcdb$X中医病证诊断疗效标准修订草案的应用建议的报批或评价形式),'|',fixed = TRUE))
 teat1 <- subset(teat,teat=='报批'|teat=='修改后报批'|teat=='修改后重新评价')
 teat1<- as.data.frame(teat1)
 names(teat1) <-'建议'
@@ -395,13 +367,13 @@ ggplot(temp, aes(x='',y=val,fill=建议)) +geom_bar(stat= 'identity')+
                           labels=c('修改后重新评价','修改后报批','报批'))
 
 ```
-##（五）标准适用性评价结果关联分析
+## （五）标准适用性评价结果关联分析
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;为方便统计，将7级评分按照好（6-7分）、中等（3-5分）、差（1-2分），分别与适用性评价的相关条目进行关联分析。
-###**1.指南熟悉程度与质量水平评价结果的关系**
+### **1.指南熟悉程度与质量水平评价结果的关系**
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;指南熟悉程度对质量水平评价结果的影响见图9。
 
-#####图9 
+##### 图9 
 ```{r}
 
 ```
