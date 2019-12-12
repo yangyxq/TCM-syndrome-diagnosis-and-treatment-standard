@@ -26,7 +26,7 @@ DN <- "妇科痛经"
 ```
 
 ---
-title: "2013年`r unique(DN)`标准适用性与应用性评价统计报告"
+title: "2018年`r unique(DN)`标准适用性评价统计报告"
 output: word_document
 ---
 
